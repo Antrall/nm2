@@ -110,37 +110,57 @@ plt.suptitle('Восстановление канала R с разным чис
 plt.show()
 
 
-def jacobi_svd(matrix, tol=1e-6):
-    """Метод вращений Якоби для SVD"""
-    n, m = matrix.shape
-    U = np.eye(n)
-    V = np.eye(m)
-    S = matrix.copy()
-    
-    for _ in range(100):  # Максимальное число итераций
-        # Находим максимальный внедиагональный элемент
-        max_val = 0
-        p, q = 0, 0
-        for i in range(min(n, m)):
-            for j in range(i+1, min(n, m)):
-                if abs(S[i,j]) > max_val:
-                    max_val = abs(S[i,j])
-                    p, q = i, j
+
+def jacobi_method(A, tolerance=1e-4, max_iterations=1000):
+    """ Метод Якоби """
+    # Проверка симметричности матрицы
+    if not np.allclose(A, A.T):
+        raise ValueError("Input matrix must be symmetric")
         
-        if max_val < tol:
+    n = A.shape[0]
+    A = A.copy().astype(float)
+    error_history = []
+    
+    # Начальная ошибка
+    current_error = np.linalg.norm(np.triu(A, k=1))
+    error_history.append(current_error)
+    
+    iteration = 0
+    while current_error > tolerance and iteration < max_iterations:
+        # Поиск максимального внедиагонального элемента
+        upper_tri = np.triu(np.abs(A), k=1)
+        p, q = np.unravel_index(np.argmax(upper_tri), A.shape)
+        max_val = upper_tri[p, q]
+        
+        if max_val < 1e-12:  # Прерывание если элементы слишком малы
             break
             
-        # Вычисляем угол вращения
-        if S[p,p] == S[q,q]:
-            theta = np.pi/4
+        # Вычисление параметров вращения
+        if A[p, p] == A[q, q]:
+            # Обработка равных диагональных элементов
+            cos_phi = np.sqrt(0.5)
+            sin_phi = np.sqrt(0.5) * np.sign(A[p, q])
         else:
-            theta = 0.5 * np.arctan(2*S[p,q] / (S[p,p] - S[q,q]))
+            t = (2 * A[p, q]) / (A[p, p] - A[q, q])
+            cos_phi = np.sqrt(0.5 * (1 + 1 / np.sqrt(1 + t**2)))
+            sin_phi = np.sign(t) * np.sqrt(0.5 * (1 - 1 / np.sqrt(1 + t**2)))
         
-        # Матрица вращения
-        J = np.eye(min(n, m))
-        J[p,p] = np.cos(theta)
-        J[q,q] = np.cos(theta)
-        J[p,q]
+        # Создание матрицы вращения
+        S = np.eye(n)
+        S[p, p] = S[q, q] = cos_phi
+        S[p, q] = -sin_phi
+        S[q, p] = sin_phi
+        
+        # Применение вращения
+        A = S.T @ A @ S
+        
+        # Обновление ошибки
+        current_error = np.linalg.norm(np.triu(A, k=1))
+        error_history.append(current_error)
+        iteration += 1
+    
+    eigenvalues = np.diag(A)
+    return eigenvalues, error_history
 
 # Гистограммы для каждого канала
 plt.figure(figsize=(15, 5))
